@@ -1,0 +1,166 @@
+{
+  "_copyright": "2016-2018, Frederico Martins",
+  "_author":    "Frederico Martins <http://github.com/fscm>",
+  "_license":   "SPDX-License-Identifier: MIT",
+  "variables": {
+    "checksum_type":    "none",
+    "checksum_value":   "",
+    "docker_name":      "centos7",
+    "headless":         "true",
+    "os_arch":          "x86_64",
+    "os_codename":      "centos",
+    "os_version":       "7",
+    "os_version_build": "1804",
+    "os_short_arch":    "64",
+    "os_type":          "RedHat_64",
+    "os_type_alt":      "centos",
+    "system_disk_size": "8192",
+    "system_domain":    "marsh",
+    "system_hostname":  "centos",
+    "system_locale":    "en_US",
+    "system_memory":    "384",
+    "system_pwd":       "centos",
+    "system_timezone":  "UTC",
+    "system_user":      "pollywog"
+  },
+  "builders": [
+    {
+      "name":                 "virtualbox",
+      "type":                 "virtualbox-iso",
+      "boot_wait":            "10s",
+      "disk_size":            "{{user `system_disk_size`}}",
+      "guest_additions_mode": "disable",
+      "guest_os_type":        "{{user `os_type`}}",
+      "hard_drive_interface": "sata",
+      "headless":             "{{user `headless`}}",
+      "http_directory":       "http",
+      "iso_checksum":         "{{user `checksum_value`}}",
+      "iso_checksum_type":    "{{user `checksum_type`}}",
+      "iso_target_path":      "../builds/cache/CentOS-{{user `os_version`}}-{{user `os_arch`}}-NetInstall-{{user `os_version_build`}}.iso",
+      "output_directory":     "../builds/sandbox/{{build_type}}",
+      "shutdown_command":     "echo '{{user `system_pwd`}}' | sudo -S /sbin/shutdown -hP now",
+      "skip_export":          true,
+      "ssh_username":         "root",
+      "ssh_password":         "{{user `system_pwd`}}",
+      "ssh_port":             22,
+      "ssh_wait_timeout":     "3600s",
+      "vm_name":              "{{user `os_codename`}}{{user `os_short_arch`}}-{{isotime \"20060102150405\"}}",
+      "boot_command": [
+        "<tab> ",
+        "text ",
+        "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/kickstart.cfg ",
+        "inst.kdump_addon=off ",
+        "inst.nosave=all<enter>"
+      ],
+      "iso_urls": [
+        "../builds/isos/CentOS-{{user `os_version`}}-{{user `os_arch`}}-NetInstall-{{user `os_version_build`}}.iso",
+        "http://buildlogs.centos.org/rolling/{{user `os_version`}}/isos/{{user `os_arch`}}/CentOS-{{user `os_version`}}-{{user `os_arch`}}-NetInstall-{{user `os_version_build`}}.iso",
+        "http://isoredirect.centos.org/centos/{{user `os_version`}}/isos/{{user `os_arch`}}/CentOS-{{user `os_version`}}-{{user `os_arch`}}-NetInstall-{{user `os_version_build`}}.iso"
+      ],
+      "vboxmanage": [
+        ["modifyvm", "{{.Name}}", "--memory", "{{user `system_memory`}}"],
+        ["modifyvm", "{{.Name}}", "--vram", "12"],
+        ["modifyvm", "{{.Name}}", "--pae", "off"],
+        ["modifyvm", "{{.Name}}", "--cpus", "1"],
+        ["modifyvm", "{{.Name}}", "--hwvirtex", "on"],
+        ["modifyvm", "{{.Name}}", "--paravirtprovider", "legacy"],
+        ["modifyvm", "{{.Name}}", "--nestedpaging", "on"],
+        ["modifyvm", "{{.Name}}", "--accelerate3d", "off"],
+        ["modifyvm", "{{.Name}}", "--accelerate2dvideo", "off"],
+        ["modifyvm", "{{.Name}}", "--chipset", "piix3"],
+        ["modifyvm", "{{.Name}}", "--boot1", "dvd"],
+        ["modifyvm", "{{.Name}}", "--boot2", "disk"],
+        ["modifyvm", "{{.Name}}", "--boot3", "none"],
+        ["modifyvm", "{{.Name}}", "--boot4", "none"],
+        ["modifyvm", "{{.Name}}", "--mouse", "ps2"],
+        ["modifyvm", "{{.Name}}", "--keyboard", "ps2"],
+        ["modifyvm", "{{.Name}}", "--audio", "none"],
+        ["modifyvm", "{{.Name}}", "--usb", "off"],
+        ["modifyvm", "{{.Name}}", "--vrde", "off"]
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+      "type":           "shell",
+      "inline_shebang": "/bin/bash -e",
+      "inline": [
+        "unset HISTFILE",
+        "history -cw",
+        "echo === System Packages ===",
+        "yum -y -q install yum-utils device-mapper-persistent-data lvm2",
+        "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo",
+        "rpm --import https://download.docker.com/linux/centos/gpg",
+        "yum -y -q install docker-ce",
+        "systemctl start docker",
+        "echo === System Settings ===",
+        "echo 'export TZ=:/etc/localtime' | sudo tee /etc/profile.d/tz.sh > /dev/null",
+        "echo === Docker Build ===",
+        "mkdir -p /build",
+        "ROOTFS=$(sudo mktemp -d -p /build {{user `os_codename`}}.XXXXXX)",
+        "yum --assumeyes --quiet --downloadonly --downloaddir=. reinstall {{user `os_codename`}}-release",
+        "rpm --root ${ROOTFS} --initdb",
+        "rpm --root ${ROOTFS} --install --nodeps --noscripts {{user `os_codename`}}-release*.rpm",
+        "rpm --root ${ROOTFS} --import ${ROOTFS}/etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7",
+        "rpm --root ${ROOTFS} --query --file --queryformat '%{NAME}\\n' /etc/redhat-release | cut -f 1 -d '-' > ${ROOTFS}/etc/yum/vars/contentdir",
+        "rpm --root ${ROOTFS} --query --file --queryformat '%{VERSION}\\n' /etc/redhat-release > ${ROOTFS}/etc/yum/vars/releasever",
+        "yum --assumeyes --quiet --installroot=${ROOTFS} --setopt=tsflags='nodocs' --setopt=override_install_langs=en_US.utf8 install yum coreutils bash",
+        "sed -i '/distroverpkg=centos-release/a override_install_langs=en_US.utf8\\ntsflags=nodocs' ${ROOTFS}/etc/yum.conf",
+        "rm -rf ${ROOTFS}/usr/share/info/*",
+        "rm -rf ${ROOTFS}/usr/share/man/*",
+        "rm -rf ${ROOTFS}/var/cache/yum/*",
+        "rm -rf ${ROOTFS}/var/log/*",
+        "rm -rf ${ROOTFS}/sbin/sln",
+        "rm -rf ${ROOTFS}/dev/null",
+        "find ${ROOTFS}/usr/share/i18n/locales -mindepth 1 -maxdepth 1 -not -name en_US -exec rm -r {} +",
+        "find ${ROOTFS}/usr/share/locale -mindepth 1 -maxdepth 1 -not \\( -name en -o -name en_US \\) -type d -exec rm -r {} +",
+        "find ${ROOTFS}/usr/share/doc -mindepth 1 -not -name COPYING* -not -type d -delete",
+        "find ${ROOTFS}/usr/share/doc -mindepth 1 -type d -empty -delete",
+        "find ${ROOTFS}/var/cache -type f -delete",
+        "find ${ROOTFS}/etc/yum.repos.d -not -iname *base* -type f -delete",
+        "## du -sh ${ROOTFS}",
+        "## du -sh ${ROOTFS}/* | sort -h",
+        "sync",
+        "tar cf {{user `docker_name`}}.tar -C ${ROOTFS} .",
+        "echo === Docker Build Test ===",
+        "docker import {{user `docker_name`}}.tar test:{{user `docker_name`}}",
+        "echo -n '[TEST] Check if yum command is installed... '",
+        "docker run --rm test:{{user `docker_name`}} rpm -q yum &>/dev/null && echo 'OK' || echo 'Failed'",
+        "echo -n '[TEST] Check package installation with yum... '",
+        "docker run --rm test:{{user `docker_name`}} bash -c 'yum -y -q install less &>/dev/null && less --help &>/dev/null' && echo 'OK' || echo 'Failed'",
+        "echo -n '[TEST] Check if packages are correctly installed... '",
+        "MISSING=$(docker run --rm test:{{user `docker_name`}} bash -c 'yum -q --assumeno install $(rpm -qa --qf \"%{name} \") &>/dev/null; echo $?'); [[ $MISSING -eq 0 ]] && echo 'OK' || echo 'Failed'",
+        "echo === Transfer Docker Image ==="
+      ]
+    },
+    {
+      "type":        "file",
+      "source":      "{{user `docker_name`}}.tar",
+      "destination": "../builds/providers/docker/{{user `docker_name`}}.tar",
+      "direction":   "download"
+    },
+    {
+      "type":           "shell",
+      "inline_shebang": "/bin/bash -e",
+      "inline": [
+        "echo ' ------------------------------------------------------------------------------'",
+        "echo '  Docker image transfered to:'",
+        "echo '  ../builds/providers/docker/{{user `docker_name`}}.tar'",
+        "echo ' ------------------------------------------------------------------------------'",
+        "echo === System Cleanup ===",
+        "## docker image rm test:{{user `docker_name`}}",
+        "## sudo rm -rf {{user `docker_name`}}.tar",
+        "## sudo rm -rf /build",
+        "echo === All Done ==="
+      ]
+    }
+  ],
+  "post-processors": [
+    [
+      {
+        "type":  "artifice",
+        "files": ["../builds/providers/docker/{{user `docker_name`}}.tar"]
+      }
+    ]
+  ]
+}

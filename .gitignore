@@ -1,0 +1,21 @@
+# Packer
+builds/cache/*
+builds/isos/*
+builds/providers/*
+!builds/providers/docker/
+builds/providers/docker/*
+builds/sandbox/*
+!.gitkeep
+
+# macOS
+*.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+
+# Windows
+Desktop.ini
+Thumbs.db

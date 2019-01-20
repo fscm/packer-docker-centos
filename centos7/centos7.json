@@ -104,7 +104,7 @@
         "rpm --root ${ROOTFS} --import ${ROOTFS}/etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7",
         "rpm --root ${ROOTFS} --query --file --queryformat '%{NAME}\\n' /etc/redhat-release | cut -f 1 -d '-' > ${ROOTFS}/etc/yum/vars/contentdir",
         "rpm --root ${ROOTFS} --query --file --queryformat '%{VERSION}\\n' /etc/redhat-release > ${ROOTFS}/etc/yum/vars/releasever",
-        "yum --assumeyes --quiet --installroot=${ROOTFS} --setopt=tsflags='nodocs' --setopt=override_install_langs=en_US.utf8 install yum coreutils bash",
+        "yum --assumeyes --quiet --installroot=${ROOTFS} --setopt=tsflags='nodocs' --setopt=override_install_langs=en_US.utf8 install yum yum-plugin-ovl coreutils bash",
         "sed -i '/distroverpkg=centos-release/a override_install_langs=en_US.utf8\\ntsflags=nodocs' ${ROOTFS}/etc/yum.conf",
         "rm -rf ${ROOTFS}/usr/share/info/*",
         "rm -rf ${ROOTFS}/usr/share/man/*",
